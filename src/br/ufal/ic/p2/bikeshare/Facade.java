@@ -4,6 +4,49 @@ package br.ufal.ic.p2.bikeshare;
  Facade
  */
 public class Facade {
+    private java.util.Map<String, java.util.Map<String,String>> usuarios = new java.util.LinkedHashMap<>();
+    private int proximoId = 1;
+    private static final String ARQUIVO = "bikeshare.ser";
+
+    @SuppressWarnings("unchecked")
+    public Facade() {
+        java.io.File arquivo = new java.io.File(ARQUIVO);
+        if (arquivo.exists()) {
+            try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(new java.io.FileInputStream(arquivo))) {
+                usuarios = (java.util.Map<String, java.util.Map<String,String>>) in.readObject();
+                proximoId = in.readInt();
+            } catch (java.io.IOException | ClassNotFoundException e) { throw new IllegalStateException("Erro ao carregar dados.", e); }
+        }
+    }
+    private static void obrigatorio(String valor, String erro) {
+        if (valor == null || valor.trim().isEmpty()) throw new IllegalArgumentException(erro);
+    }
+    private String cadastrar(String nome, String email, String senha, String tipo, String documento, String razao, String plano, String mensalidade, boolean juridica) {
+        obrigatorio(nome, "Nome nao pode ser nulo.");
+        obrigatorio(email, "Email nao pode ser nulo.");
+        if (!email.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) throw new IllegalArgumentException("Email invalido.");
+        obrigatorio(senha, "Senha nao pode ser nula.");
+        if (!tipo.equals(juridica ? "pessoaJuridica" : "pessoaFisica")) throw new IllegalArgumentException("Tipo invalido.");
+        obrigatorio(documento, juridica ? "CNPJ nao pode ser nulo." : "CPF nao pode ser nulo.");
+        if (juridica) obrigatorio(razao, "Razao social nao pode ser nula.");
+        for (java.util.Map<String,String> u : usuarios.values()) if (u.get("email").equalsIgnoreCase(email)) throw new IllegalArgumentException("Email ja cadastrado.");
+        if (!"avulso".equals(plano) && !"assinante".equals(plano)) throw new IllegalArgumentException("Plano invalido.");
+        String valor = null;
+        if ("assinante".equals(plano)) {
+            obrigatorio(mensalidade, "Mensalidade nao pode ser nula.");
+            java.math.BigDecimal numero;
+            try { numero = new java.math.BigDecimal(mensalidade.replace(',', '.')); } catch (NumberFormatException e) { throw new IllegalArgumentException("Mensalidade deve ser numerica."); }
+            if (numero.signum() < 0) throw new IllegalArgumentException("Mensalidade deve ser nao-negativa.");
+            valor = numero.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+        } else if (mensalidade != null && !mensalidade.trim().isEmpty()) throw new IllegalArgumentException("Plano nao possui mensalidade.");
+        java.util.Map<String,String> u = new java.util.HashMap<>();
+        u.put("nome", nome); u.put("email", email); u.put("senha", senha); u.put("tipo", tipo); u.put("estado", "ativo");
+        u.put("plano", plano); u.put("metodoPagamento", "nenhum"); u.put(juridica ? "cnpj" : "cpf", documento);
+        if (juridica) u.put("razaoSocial", razao);
+        if (valor != null) u.put("mensalidade", valor);
+        String id = "U" + proximoId++; usuarios.put(id, u); return id;
+    }
+
 
     private static final String AINDA_NAO_IMPLEMENTADO = "Ainda não implementado.";
 
@@ -12,21 +55,21 @@ public class Facade {
     // =====================================================================
 
     public String criarUsuario(String nome, String email, String senha, String tipo, String cpfOuCnpj) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        return cadastrar(nome, email, senha, tipo, cpfOuCnpj, null, "avulso", null, false);
     }
 
     public String criarUsuario(String nome, String email, String senha, String tipo, String cnpj, String razaoSocial) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        return cadastrar(nome, email, senha, tipo, cnpj, razaoSocial, "avulso", null, true);
     }
 
     public String criarUsuario(String nome, String email, String senha, String tipo, String cpf,
                                 String plano, String mensalidade) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        return cadastrar(nome, email, senha, tipo, cpf, null, plano, mensalidade, false);
     }
 
     public String criarUsuario(String nome, String email, String senha, String tipo, String cnpj,
                                 String razaoSocial, String plano, String mensalidade) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        return cadastrar(nome, email, senha, tipo, cnpj, razaoSocial, plano, mensalidade, true);
     }
 
     // =====================================================================
@@ -34,7 +77,14 @@ public class Facade {
     // =====================================================================
 
     public String getAtributoUsuario(String usuario, String atributo) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        obrigatorio(usuario, "Identificacao do usuario nao pode ser nula.");
+        java.util.Map<String,String> u = usuarios.get(usuario);
+        if (u == null) throw new IllegalArgumentException("Usuario nao existe.");
+        if (("cnpj".equals(atributo) || "razaoSocial".equals(atributo)) && !"pessoaJuridica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa juridica.");
+        if ("cpf".equals(atributo) && !"pessoaFisica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa fisica.");
+        if ("mensalidade".equals(atributo) && !u.containsKey(atributo)) throw new IllegalArgumentException("Plano nao possui mensalidade.");
+        if (!u.containsKey(atributo)) throw new IllegalArgumentException("Atributo nao existe.");
+        return u.get(atributo);
     }
 
     public String getUsuarioPorEmail(String email) {
@@ -194,10 +244,13 @@ public class Facade {
     // =====================================================================
 
     public void zerarSistema() {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        usuarios.clear(); proximoId = 1;
+        try { java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(ARQUIVO)); } catch (java.io.IOException e) { throw new IllegalStateException("Erro ao limpar dados.", e); }
     }
 
     public void encerrarSistema() {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(new java.io.FileOutputStream(ARQUIVO))) {
+            out.writeObject(usuarios); out.writeInt(proximoId);
+        } catch (java.io.IOException e) { throw new IllegalStateException("Erro ao salvar dados.", e); }
     }
 }
