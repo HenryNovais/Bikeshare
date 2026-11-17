@@ -84,7 +84,7 @@ public class Facade {
         if ("totalPendencias".equals(atributo)) return u.getOrDefault(atributo, "0,00");
         if (("numeroCartao".equals(atributo) || "validadeCartao".equals(atributo)) && !"cartao".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa cartao.");
         if ("chavePix".equals(atributo) && !"pix".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa pix.");
-        if ("saldo".equals(atributo) && !"saldo".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa saldo pre-carregado.");
+        if ("saldo".equals(atributo) && !"saldoPreCarregado".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa saldo pre-carregado.");
         if (("cnpj".equals(atributo) || "razaoSocial".equals(atributo)) && !"pessoaJuridica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa juridica.");
         if ("cpf".equals(atributo) && !"pessoaFisica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa fisica.");
         if ("mensalidade".equals(atributo) && !u.containsKey(atributo)) throw new IllegalArgumentException("Plano nao possui mensalidade.");
@@ -105,15 +105,62 @@ public class Facade {
     // =====================================================================
 
     public void alterarUsuario(String usuario, String atributo, String valor) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        java.util.Map<String,String> u = usuarioExistente(usuario);
+        switch (atributo) {
+            case "nome": obrigatorio(valor, "Nome nao pode ser nulo."); break;
+            case "senha": obrigatorio(valor, "Senha nao pode ser nula."); break;
+            case "email":
+                obrigatorio(valor, "Email nao pode ser nulo.");
+                if (!valor.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) throw new IllegalArgumentException("Email invalido.");
+                for (java.util.Map.Entry<String, java.util.Map<String,String>> entrada : usuarios.entrySet())
+                    if (!entrada.getKey().equals(usuario) && entrada.getValue().get("email").equalsIgnoreCase(valor)) throw new IllegalArgumentException("Email ja cadastrado.");
+                break;
+            case "plano":
+                if (!"avulso".equals(valor) && !"assinante".equals(valor)) throw new IllegalArgumentException("Plano invalido.");
+                if (!valor.equals(u.get("plano"))) {
+                    if ("assinante".equals(valor)) u.put("mensalidade", "30,00");
+                    else u.remove("mensalidade");
+                }
+                break;
+            case "metodoPagamento":
+                if (!"saldoPreCarregado".equals(valor)) throw new IllegalArgumentException("Valor de metodo de pagamento invalido.");
+                u.putIfAbsent("saldo", "0,00"); break;
+            case "saldo":
+                if (!"saldoPreCarregado".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa saldo pre-carregado.");
+                obrigatorio(valor, "Valor nao pode ser nulo.");
+                java.math.BigDecimal quantia;
+                try { quantia = new java.math.BigDecimal(valor.replace(',', '.')); } catch (NumberFormatException e) { throw new IllegalArgumentException("Valor deve ser numerico."); }
+                if (quantia.signum() <= 0) throw new IllegalArgumentException("Valor deve ser positivo.");
+                valor = new java.math.BigDecimal(u.get("saldo").replace(',', '.')).add(quantia).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+                break;
+            default: throw new IllegalArgumentException("Atributo nao pode ser alterado.");
+        }
+        u.put(atributo, valor);
     }
 
     public void alterarUsuario(String usuario, String atributo, String valor1, String chave) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        java.util.Map<String,String> u = usuarioExistente(usuario);
+        if (!"metodoPagamento".equals(atributo)) throw new IllegalArgumentException("Atributo nao pode ser alterado.");
+        if (!"pix".equals(valor1)) throw new IllegalArgumentException("Valor de metodo de pagamento invalido.");
+        obrigatorio(chave, "Chave pix nao pode ser nula.");
+        u.put("metodoPagamento", valor1); u.put("chavePix", chave);
     }
 
     public void alterarUsuario(String usuario, String atributo, String valor1, String numero, String validade) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        java.util.Map<String,String> u = usuarioExistente(usuario);
+        if (!"metodoPagamento".equals(atributo)) throw new IllegalArgumentException("Atributo nao pode ser alterado.");
+        if (!"cartao".equals(valor1)) throw new IllegalArgumentException("Valor de metodo de pagamento invalido.");
+        obrigatorio(numero, "Numero do cartao nao pode ser nulo.");
+        obrigatorio(validade, "Validade do cartao nao pode ser nula.");
+        if (!validade.matches("(0[1-9]|1[0-2])/\\d{4}")) throw new IllegalArgumentException("Validade do cartao invalida.");
+        u.put("metodoPagamento", valor1); u.put("numeroCartao", numero); u.put("validadeCartao", validade);
+    }
+
+    private java.util.Map<String,String> usuarioExistente(String id) {
+        obrigatorio(id, "Identificacao do usuario nao pode ser nula.");
+        java.util.Map<String,String> usuario = usuarios.get(id);
+        if (usuario == null) throw new IllegalArgumentException("Usuario nao existe.");
+        return usuario;
     }
 
     // =====================================================================
