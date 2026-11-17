@@ -80,6 +80,11 @@ public class Facade {
         obrigatorio(usuario, "Identificacao do usuario nao pode ser nula.");
         java.util.Map<String,String> u = usuarios.get(usuario);
         if (u == null) throw new IllegalArgumentException("Usuario nao existe.");
+        if ("aluguelAtivo".equals(atributo)) return u.getOrDefault(atributo, "nenhum");
+        if ("totalPendencias".equals(atributo)) return u.getOrDefault(atributo, "0,00");
+        if (("numeroCartao".equals(atributo) || "validadeCartao".equals(atributo)) && !"cartao".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa cartao.");
+        if ("chavePix".equals(atributo) && !"pix".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa pix.");
+        if ("saldo".equals(atributo) && !"saldo".equals(u.get("metodoPagamento"))) throw new IllegalArgumentException("Usuario nao usa saldo pre-carregado.");
         if (("cnpj".equals(atributo) || "razaoSocial".equals(atributo)) && !"pessoaJuridica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa juridica.");
         if ("cpf".equals(atributo) && !"pessoaFisica".equals(u.get("tipo"))) throw new IllegalArgumentException("Usuario nao eh pessoa fisica.");
         if ("mensalidade".equals(atributo) && !u.containsKey(atributo)) throw new IllegalArgumentException("Plano nao possui mensalidade.");
@@ -88,7 +93,11 @@ public class Facade {
     }
 
     public String getUsuarioPorEmail(String email) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        obrigatorio(email, "Email nao pode ser nulo.");
+        for (java.util.Map.Entry<String, java.util.Map<String,String>> entrada : usuarios.entrySet()) {
+            if (entrada.getValue().get("email").equalsIgnoreCase(email)) return entrada.getKey();
+        }
+        throw new IllegalArgumentException("Usuario nao existe.");
     }
 
     // =====================================================================
