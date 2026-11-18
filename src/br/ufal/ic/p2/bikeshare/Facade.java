@@ -168,7 +168,11 @@ public class Facade {
     // =====================================================================
 
     public void removerUsuario(String usuario) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        java.util.Map<String,String> u = usuarioExistente(usuario);
+        if (!"nenhum".equals(u.getOrDefault("aluguelAtivo", "nenhum"))) {
+            throw new IllegalArgumentException("Nao e possivel remover usuario com aluguel em andamento.");
+        }
+        usuarios.remove(usuario);
     }
 
     // =====================================================================
