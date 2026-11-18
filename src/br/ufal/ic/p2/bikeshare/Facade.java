@@ -6,6 +6,8 @@ package br.ufal.ic.p2.bikeshare;
 public class Facade {
     private java.util.Map<String, java.util.Map<String,String>> usuarios = new java.util.LinkedHashMap<>();
     private int proximoId = 1;
+    private java.util.Map<String, java.util.Map<String,String>> estacoes = new java.util.LinkedHashMap<>();
+    private int proximaEstacao = 1;
     private static final String ARQUIVO = "bikeshare.ser";
 
     @SuppressWarnings("unchecked")
@@ -15,6 +17,12 @@ public class Facade {
             try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(new java.io.FileInputStream(arquivo))) {
                 usuarios = (java.util.Map<String, java.util.Map<String,String>>) in.readObject();
                 proximoId = in.readInt();
+                try {
+                    estacoes = (java.util.Map<String, java.util.Map<String,String>>) in.readObject();
+                    proximaEstacao = in.readInt();
+                } catch (java.io.EOFException e) {
+                    // Arquivos criados antes do cadastro de estacoes nao contem estes campos.
+                }
             } catch (java.io.IOException | ClassNotFoundException e) { throw new IllegalStateException("Erro ao carregar dados.", e); }
         }
     }
@@ -180,7 +188,20 @@ public class Facade {
     // =====================================================================
 
     public String criarEstacao(String nome, String endereco, String capacidade) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        obrigatorio(nome, "Nome nao pode ser nulo.");
+        obrigatorio(endereco, "Endereco nao pode ser nulo.");
+        obrigatorio(capacidade, "Capacidade nao pode ser nula.");
+        int numero;
+        try { numero = Integer.parseInt(capacidade); }
+        catch (NumberFormatException e) { throw new IllegalArgumentException("Capacidade deve ser numerica."); }
+        if (numero <= 0) throw new IllegalArgumentException("Capacidade deve ser positiva.");
+        java.util.Map<String,String> estacao = new java.util.HashMap<>();
+        estacao.put("nome", nome); estacao.put("endereco", endereco);
+        estacao.put("capacidade", Integer.toString(numero));
+        estacao.put("bicicletasDisponiveis", "0");
+        String id = "E" + proximaEstacao++;
+        estacoes.put(id, estacao);
+        return id;
     }
 
     // =====================================================================
@@ -208,11 +229,19 @@ public class Facade {
     // =====================================================================
 
     public String getBicicletasDisponiveis(String estacao) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        return estacaoExistente(estacao).get("bicicletasDisponiveis");
     }
 
     public String getVagasDisponiveis(String estacao) {
-        throw new UnsupportedOperationException(AINDA_NAO_IMPLEMENTADO);
+        java.util.Map<String,String> dados = estacaoExistente(estacao);
+        return Integer.toString(Integer.parseInt(dados.get("capacidade")) - Integer.parseInt(dados.get("bicicletasDisponiveis")));
+    }
+
+    private java.util.Map<String,String> estacaoExistente(String id) {
+        obrigatorio(id, "Identificacao da estacao nao pode ser nula.");
+        java.util.Map<String,String> estacao = estacoes.get(id);
+        if (estacao == null) throw new IllegalArgumentException("Estacao nao existe.");
+        return estacao;
     }
 
     public String getEstadoBicicleta(String bicicleta) {
@@ -304,13 +333,14 @@ public class Facade {
     // =====================================================================
 
     public void zerarSistema() {
-        usuarios.clear(); proximoId = 1;
+        usuarios.clear(); proximoId = 1; estacoes.clear(); proximaEstacao = 1;
         try { java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(ARQUIVO)); } catch (java.io.IOException e) { throw new IllegalStateException("Erro ao limpar dados.", e); }
     }
 
     public void encerrarSistema() {
         try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(new java.io.FileOutputStream(ARQUIVO))) {
             out.writeObject(usuarios); out.writeInt(proximoId);
+            out.writeObject(estacoes); out.writeInt(proximaEstacao);
         } catch (java.io.IOException e) { throw new IllegalStateException("Erro ao salvar dados.", e); }
     }
 }
